@@ -1,0 +1,843 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full bg-[#F1F0F0]">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>BEC 預購單管理後台</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts Inter & Noto Sans TC -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Noto+Sans+TC:wght@300;400;500;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            bg: '#F1F0F0',
+                            card: '#FFFFFF',
+                            border: '#E8E7E3',
+                            borderLight: '#F0EFEA',
+                            textMain: '#3B392D',
+                            textMuted: '#757575',
+                            surface: '#F3F2EE',
+                            surfaceDark: '#2B2B2B',
+                            surfaceHover: '#404040',
+                            accentTag: '#E5E4E0'
+                        }
+                    },
+                    boxShadow: {
+                        'island': '0 10px 30px -5px rgba(0, 0, 0, 0.04), 0 4px 12px -2px rgba(0, 0, 0, 0.02)',
+                        'modal': '0 25px 50px -12px rgba(0, 0, 0, 0.15)'
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #D1D0CB; border-radius: 9999px; }
+        ::-webkit-scrollbar-thumb:hover { background: #A3A29D; }
+        
+        .island-card { transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+        .toast-slide { animation: slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px) translateX(-50%); } to { opacity: 1; transform: translateY(0) translateX(-50%); } }
+        .bec-attention-dot { width:7px;height:7px;border-radius:999px;display:inline-block;flex-shrink:0; }
+        .bec-drawer { transform:translateX(100%); transition:transform .28s cubic-bezier(.16,1,.3,1); }
+        .bec-drawer.is-open { transform:translateX(0); }
+        .bec-drawer-backdrop { opacity:0; pointer-events:none; transition:opacity .2s ease; }
+        .bec-drawer-backdrop.is-open { opacity:1; pointer-events:auto; }
+        @media (max-width:640px) { .bec-drawer { width:100% !important; } }
+    </style>
+</head>
+<body class="h-full text-brand-textMain bg-brand-bg font-sans antialiased flex flex-col selection:bg-brand-surfaceDark selection:text-white">
+
+    <!-- 管理員登入解鎖遮罩 -->
+    <div id="admin-auth-overlay" class="fixed inset-0 bg-brand-bg z-[100] flex items-center justify-center p-4">
+        <div class="island-card bg-brand-card w-full max-w-md rounded-3xl border border-brand-border shadow-modal p-8 text-center space-y-6">
+            <div class="w-14 h-14 bg-brand-surface rounded-2xl flex items-center justify-center mx-auto text-brand-textMain text-xl shadow-sm">
+                <i class="fa-solid fa-lock"></i>
+            </div>
+            <div>
+                <h3 class="text-lg font-bold text-brand-textMain">BEC 管理員安全驗證</h3>
+                <p class="text-xs text-brand-textMuted mt-1">請輸入後台管理密碼以存取物流與訂單系統</p>
+            </div>
+            <!-- 嚴格表單控制：必須點擊按鈕或按 Enter 才能送出驗證 -->
+            <form onsubmit="event.preventDefault(); verifyAdminPassword(false);" class="space-y-3">
+                <input type="password" id="admin-password-input" autocomplete="new-password" placeholder="請輸入管理員密碼..." class="w-full p-3 bg-brand-bg rounded-xl border border-brand-border text-xs text-brand-textMain text-center tracking-widest focus:outline-none focus:ring-1 focus:ring-brand-surfaceDark" />
+                <button type="button" onclick="verifyAdminPassword(false)" class="w-full py-3 rounded-xl bg-brand-surfaceDark hover:bg-brand-surfaceHover text-white text-xs font-semibold shadow-sm transition">
+                    解鎖進入後台
+                </button>
+            </form>
+            <p id="auth-error-msg" class="text-xs text-red-600 hidden">密碼錯誤，請重新輸入</p>
+        </div>
+    </div>
+
+    <!-- TOP NAVIGATION BAR -->
+    <header class="sticky top-0 z-40 bg-brand-bg/80 backdrop-blur-md border-b border-brand-border/60 transition-all pt-3 sm:pt-4">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-2">
+            <div class="flex items-center gap-3 min-w-0">
+                <img src="https://img.1shop.tw/B9rGMnDaXRaKmQ90Ozo1ZlWE/zXOMxVeg3Vb5n4P138aGjDkP/original-2.png.avif" alt="BEC Logo" class="h-10 object-contain">
+                <div class="truncate">
+                    <p class="text-[10px] sm:text-xs text-brand-textMuted tracking-wider uppercase mt-0.5">內部管理中樞 (Admin Only)</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-2 flex-shrink-0">
+                <span id="cloud-sync-status" class="px-3 py-1.5 rounded-xl text-xs font-medium bg-brand-surface text-brand-textMuted flex items-center gap-1.5 border border-brand-border/80">
+                    <i class="fa-solid fa-cloud"></i> <span>已連線至雲端資料庫</span>
+                </span>
+            </div>
+        </div>
+    </header>
+
+    <!-- MAIN CONTAINER -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 md:py-10">
+
+        <!-- ADMIN MANAGEMENT DASHBOARD VIEW -->
+        <section id="admin-view" class="space-y-6 md:space-y-8 transition-all duration-300">
+            
+            <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <h2 class="text-2xl font-bold tracking-tight text-brand-textMain">預購單管理中樞</h2>
+                    <p class="text-xs text-brand-textMuted">多軌動態歷程控管、自訂階段與批次快捷操作 (資料自動同步至 Google Sheets)</p>
+                </div>
+                <div class="flex flex-wrap items-center gap-2.5">
+                    <button onclick="fetchDatabaseInit()" class="px-3.5 py-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border text-xs font-medium text-brand-textMain shadow-sm transition flex items-center gap-2" title="手動重新抓取最新資料">
+                        <i class="fa-solid fa-rotate"></i> <span>重新載入</span>
+                    </button>
+                    <button onclick="openStageManagerModal()" class="px-3.5 py-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border text-xs font-medium text-brand-textMain shadow-sm transition flex items-center gap-2">
+                        <i class="fa-solid fa-diagram-project text-brand-textMuted"></i> <span>階段流程設定中樞</span>
+                    </button>
+                    <button onclick="exportToCSV()" class="px-3.5 py-2.5 rounded-xl bg-brand-card hover:bg-brand-surface border border-brand-border text-xs font-medium text-brand-textMain shadow-sm transition flex items-center gap-2">
+                        <i class="fa-solid fa-file-csv text-brand-textMuted"></i> <span>匯出 CSV</span>
+                    </button>
+                    <button onclick="openNewOrderModal()" class="px-4 py-2.5 rounded-xl bg-brand-surfaceDark hover:bg-brand-surfaceHover text-white text-xs font-medium shadow-sm transition flex items-center gap-2">
+                        <i class="fa-solid fa-plus text-xs"></i> <span>新增訂單</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Top Overview Metrics -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
+                <div class="island-card bg-brand-card rounded-3xl p-4 sm:p-6 border border-brand-border shadow-island space-y-2">
+                    <div class="flex items-center justify-between text-brand-textMuted text-xs"><span>總訂單數 Total</span><i class="fa-solid fa-boxes-stacked"></i></div>
+                    <div id="metric-total" class="text-2xl sm:text-3xl font-bold font-mono text-brand-textMain">0</div>
+                </div>
+                <div class="island-card bg-brand-card rounded-3xl p-4 sm:p-6 border border-brand-border shadow-island space-y-2">
+                    <div class="flex items-center justify-between text-brand-textMuted text-xs"><span>商品備貨/採購</span><i class="fa-solid fa-clock"></i></div>
+                    <div id="metric-pending" class="text-2xl sm:text-3xl font-bold font-mono text-brand-textMain">0</div>
+                </div>
+                <div class="island-card bg-brand-card rounded-3xl p-4 sm:p-6 border border-brand-border shadow-island space-y-2">
+                    <div class="flex items-center justify-between text-brand-textMuted text-xs"><span>國際轉運/翱翔</span><i class="fa-solid fa-plane"></i></div>
+                    <div id="metric-transit" class="text-2xl sm:text-3xl font-bold font-mono text-brand-textMain">0</div>
+                </div>
+                <div class="island-card bg-brand-card rounded-3xl p-4 sm:p-6 border border-brand-border shadow-island space-y-2">
+                    <div class="flex items-center justify-between text-brand-textMuted text-xs"><span>已完結 Delivered</span><i class="fa-solid fa-circle-check"></i></div>
+                    <div id="metric-delivered" class="text-2xl sm:text-3xl font-bold font-mono text-brand-textMain">0</div>
+                </div>
+            </div>
+
+            <!-- Today Work Area -->
+            <div class="island-card bg-brand-card rounded-3xl p-5 sm:p-6 border border-brand-border shadow-island space-y-4">
+                <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-brand-borderLight pb-3"><div><h3 class="text-sm font-bold text-brand-textMain flex items-center gap-2"><i class="fa-regular fa-sun text-brand-textMuted"></i><span>今日工作區</span></h3><p class="text-[10px] text-brand-textMuted mt-1">優先處理需要人工注意的訂單與長時間未更新項目</p></div><span id="today-work-date" class="text-[10px] font-mono text-brand-textMuted"></span></div>
+                <div id="today-workspace" class="grid grid-cols-2 lg:grid-cols-5 gap-2"></div>
+            </div>
+
+            <!-- Global Announcement Settings -->
+            <div class="island-card bg-brand-card rounded-3xl p-5 sm:p-6 border border-brand-border shadow-island space-y-4">
+                <div class="flex items-center justify-between border-b border-brand-borderLight pb-3">
+                    <h3 class="text-sm font-bold text-brand-textMain flex items-center gap-2">
+                        <i class="fa-solid fa-bullhorn text-brand-textMuted"></i><span>前台全局公告設定</span>
+                    </h3>
+                    <label class="flex items-center gap-2 cursor-pointer text-xs">
+                        <span class="text-brand-textMuted font-medium">前台顯示公告</span>
+                        <input type="checkbox" id="admin-announcement-toggle" class="rounded border-gray-300 text-brand-surfaceDark focus:ring-0 cursor-pointer" onchange="saveAnnouncementSettings()">
+                    </label>
+                </div>
+                <div class="flex flex-col sm:flex-row gap-3">
+                    <input type="text" id="admin-announcement-text" placeholder="例如：由於颱風影響，本週日本空運航班將延遲 1-2 個工作天..." class="flex-1 p-2.5 bg-brand-bg rounded-xl border border-brand-border text-xs text-brand-textMain focus:outline-none focus:ring-1 focus:ring-brand-surfaceDark">
+                    <button onclick="saveAnnouncementSettings()" class="px-5 py-2.5 bg-brand-surface hover:bg-brand-border text-brand-textMain text-xs font-bold rounded-xl transition whitespace-nowrap border border-brand-borderLight shadow-sm">
+                        儲存並更新至前台
+                    </button>
+                </div>
+            </div>
+
+            <!-- Batch Action Toolbar -->
+            <div id="batch-toolbar" class="hidden island-card bg-brand-surfaceDark text-white rounded-2xl p-4 border border-brand-border shadow-modal flex flex-col md:flex-row items-start md:items-center justify-between gap-3 transition-all">
+                <div class="flex items-center gap-3 text-xs shrink-0">
+                    <span class="font-bold bg-white/20 px-2.5 py-1 rounded-lg">已選取 <span id="batch-count">0</span> 筆訂單</span>
+                    <span class="text-gray-300">快速套用批次動作：</span>
+                </div>
+                <div class="flex flex-wrap items-center gap-2 w-full md:w-auto">
+                    <select id="batch-status-select" class="px-3 py-1.5 bg-brand-surfaceHover border border-gray-600 rounded-xl text-xs text-white focus:outline-none"></select>
+                    <input type="text" id="batch-custom-desc" placeholder="選填：自訂歷程動態備註..." class="px-3 py-1.5 bg-brand-surfaceHover border border-gray-600 rounded-xl text-xs text-white placeholder-gray-400 focus:outline-none flex-1 md:w-48" />
+                    <button onclick="applyBatchStatusUpdate()" class="px-3 py-1.5 bg-white text-brand-textMain rounded-xl text-xs font-semibold hover:bg-gray-200 transition whitespace-nowrap">批次變更進度</button>
+                    <button onclick="applyBatchDelete()" class="px-3 py-1.5 bg-red-600/80 hover:bg-red-600 text-white rounded-xl text-xs font-medium transition whitespace-nowrap">批次刪除</button>
+                </div>
+            </div>
+
+            <!-- Main Order Table -->
+            <div class="island-card bg-brand-card rounded-3xl border border-brand-border shadow-island overflow-hidden">
+                <div class="p-4 sm:p-6 border-b border-brand-borderLight flex flex-col md:flex-row items-center justify-between gap-4">
+                    <div id="admin-filter-tabs" class="flex items-center gap-1.5 p-1 bg-brand-surface rounded-2xl border border-brand-border/60 overflow-x-auto w-full md:w-auto"></div>
+                    <div class="relative w-full md:w-72">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-brand-textMuted text-xs"></i>
+                        <input type="text" id="admin-search-input" oninput="renderAdminTable()" placeholder="搜尋訂單號、顧客、Email 或備註..." class="w-full pl-9 pr-4 py-2 bg-brand-bg rounded-xl border border-brand-border text-xs text-brand-textMain placeholder-brand-textMuted focus:outline-none focus:ring-1 focus:ring-brand-surfaceDark" />
+                    </div>
+                </div>
+                <div class="overflow-x-auto min-w-full">
+                    <table class="w-full text-left text-xs border-collapse min-w-[700px]">
+                        <thead>
+                            <tr class="bg-brand-surface/50 border-b border-brand-border text-brand-textMuted font-medium uppercase tracking-wider whitespace-nowrap">
+                                <th class="py-4 px-4 w-10 text-center"><input type="checkbox" id="select-all-checkbox" onchange="toggleSelectAllRows(this)" class="rounded border-gray-300 text-brand-surfaceDark focus:ring-0 cursor-pointer"></th>
+                                <th class="py-4 px-4">訂單編號 / 備註</th>
+                                <th class="py-4 px-4">顧客姓名 / Email</th>
+                                <th class="py-4 px-4">總金額</th>
+                                <th class="py-4 px-4">當前進度階段 (直覺切換)</th>
+                                <th class="py-4 px-4">最後更新</th>
+                                <th class="py-4 px-4 text-right">操作動作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="admin-table-body" class="divide-y divide-brand-borderLight text-brand-textMain font-normal">
+                            <!-- JS 會注入資料 -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="p-4 bg-brand-surface/30 border-t border-brand-borderLight text-xs text-brand-textMuted flex items-center justify-between">
+                    <span>顯示 <span id="showing-count" class="font-mono font-medium text-brand-textMain">0</span> 筆資料</span>
+                    <span>變更進度後將自動背景儲存至雲端試算表</span>
+                </div>
+            </div>
+
+        </section>
+    </main>
+
+    <!-- ORDER DETAIL DRAWER -->
+    <div id="order-drawer-backdrop" onclick="closeOrderDrawer()" class="bec-drawer-backdrop fixed inset-0 bg-black/30 backdrop-blur-[2px] z-[55]"></div>
+    <aside id="order-detail-drawer" class="bec-drawer fixed top-0 right-0 h-full w-[min(560px,94vw)] bg-brand-card border-l border-brand-border shadow-modal z-[60] overflow-y-auto">
+        <div class="sticky top-0 bg-brand-card/90 backdrop-blur-md border-b border-brand-borderLight p-5 flex items-center justify-between z-10"><div><p class="text-[10px] uppercase tracking-wider text-brand-textMuted">Order Detail</p><h3 id="drawer-order-id" class="font-mono font-bold text-brand-textMain mt-1">—</h3></div><button onclick="closeOrderDrawer()" class="p-2 rounded-xl hover:bg-brand-surface text-brand-textMuted"><i class="fa-solid fa-xmark"></i></button></div>
+        <div class="p-5 space-y-5">
+            <div id="drawer-summary" class="grid grid-cols-2 gap-2"></div>
+            <div class="flex gap-2"><button onclick="moveOrderStage(-1)" class="flex-1 py-2.5 rounded-xl bg-brand-surface hover:bg-brand-border text-xs font-medium"><i class="fa-solid fa-arrow-left mr-1"></i>上一階段</button><button onclick="moveOrderStage(1)" class="flex-1 py-2.5 rounded-xl bg-brand-surfaceDark hover:bg-brand-surfaceHover text-white text-xs font-medium">下一階段<i class="fa-solid fa-arrow-right ml-1"></i></button></div>
+            <!-- Progress Bar -->
+            <div class="mt-4">
+                <div class="flex justify-between text-[10px] font-mono text-brand-textMuted mb-1">
+                    <span>進度</span>
+                    <span id="drawer-progress">0%</span>
+                </div>
+                <div class="h-1.5 w-full bg-brand-surface rounded-full overflow-hidden">
+                    <div id="drawer-progress-bar" class="h-full bg-brand-surfaceDark transition-all duration-300" style="width: 0%"></div>
+                </div>
+            </div>
+            <div class="p-4 rounded-2xl bg-brand-bg border border-brand-border"><div class="grid grid-cols-2 gap-4 text-xs"><div><span class="text-brand-textMuted block mb-1">顧客</span><span id="drawer-customer" class="font-medium">—</span></div><div><span class="text-brand-textMuted block mb-1">Email</span><span id="drawer-email" class="font-mono break-all">—</span></div><div><span class="text-brand-textMuted block mb-1">物流</span><span id="drawer-carrier">—</span></div><div><span class="text-brand-textMuted block mb-1">物流單號</span><span id="drawer-tracking" class="font-mono">—</span></div><div><span class="text-brand-textMuted block mb-1">ETA</span><span id="drawer-eta" class="font-medium">—</span></div><div><span class="text-brand-textMuted block mb-1">最後更新</span><span id="drawer-updated" class="font-mono">—</span></div></div></div>
+            <div><h4 class="text-xs font-bold mb-2">管理狀態</h4><div id="drawer-status-box" class="p-3 rounded-xl bg-brand-surface text-xs"></div></div>
+            <div><h4 class="text-xs font-bold mb-2">操作紀錄 Audit Log</h4><div id="drawer-audit-log" class="space-y-2"></div></div>
+            <div><h4 class="text-xs font-bold mb-2">訂單歷程</h4><div id="drawer-timeline" class="space-y-2"></div></div>
+            <div class="flex gap-2 pt-2"><button id="drawer-edit-btn" class="w-full py-2.5 rounded-xl bg-brand-surfaceDark text-white text-xs font-medium">編輯訂單</button></div>
+        </div>
+    </aside>
+
+    <!-- STAGE MANAGER MODAL -->
+    <div id="modal-stage-manager" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden opacity-0 transition-opacity duration-200">
+        <div class="island-card bg-brand-card w-full max-w-2xl rounded-3xl border border-brand-border shadow-modal p-6 space-y-6 transform scale-95 transition-transform duration-200 max-h-[88vh] flex flex-col">
+            <div class="flex items-center justify-between border-b border-brand-borderLight pb-4 flex-shrink-0">
+                <div class="flex items-center gap-3"><div class="w-10 h-10 rounded-xl bg-brand-surface flex items-center justify-center text-brand-textMain"><i class="fa-solid fa-diagram-project"></i></div><div><h3 class="text-base font-bold text-brand-textMain">階段流程設定中樞</h3><p class="text-xs text-brand-textMuted">管理預設全域進度階段或自訂圖示</p></div></div>
+                <button onclick="closeModal('modal-stage-manager')" class="text-brand-textMuted hover:text-brand-textMain p-2"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            <div class="flex-1 overflow-y-auto space-y-2 pr-1" id="stage-manager-list"></div>
+            <form onsubmit="handleAddNewStage(event)" class="pt-4 border-t border-brand-borderLight space-y-3 flex-shrink-0">
+                <h4 class="text-xs font-bold text-brand-textMain uppercase tracking-wider">新增自訂進度階段</h4>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    <input type="text" id="new-stage-id" placeholder="唯一代碼 (如: custom_1)" class="p-2.5 bg-brand-bg rounded-xl border border-brand-border text-xs focus:outline-none" required />
+                    <input type="text" id="new-stage-label" placeholder="顯示名稱 (如: 品管檢測中)" class="p-2.5 bg-brand-bg rounded-xl border border-brand-border text-xs focus:outline-none" required />
+                    <select id="new-stage-icon" class="p-2.5 bg-brand-bg rounded-xl border border-brand-border text-xs focus:outline-none">
+                        <option value="fa-file-lines">📄 檔案/單據</option>
+                        <option value="fa-credit-card">💳 信用卡/付款</option>
+                        <option value="fa-circle-check">✅ 勾選/確認</option>
+                        <option value="fa-boxes-packing">📦 備貨/包裹</option>
+                        <option value="fa-cart-shopping">🛒 購物/採購</option>
+                        <option value="fa-ticket">🎫 活動/票券</option>
+                        <option value="fa-warehouse">🏬 倉庫/轉運</option>
+                        <option value="fa-plane">✈️ 飛機/翱翔</option>
+                        <option value="fa-truck-fast">🚚 陸運/出貨</option>
+                        <option value="fa-store">🏪 門市/到店</option>
+                    </select>
+                </div>
+                <input type="text" id="new-stage-desc" placeholder="詳細動態描述說明..." class="w-full p-2.5 bg-brand-bg rounded-xl border border-brand-border text-xs focus:outline-none" />
+                <button type="submit" class="w-full py-2.5 bg-brand-surfaceDark text-white text-xs font-medium rounded-xl hover:bg-brand-surfaceHover transition">+ 新增至階段清單</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- NEW / EDIT ORDER MODAL (Carrier, Tracking, and Items Editor) -->
+    <div id="modal-edit-order" class="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden opacity-0 transition-opacity duration-200">
+        <div class="island-card bg-brand-card w-full max-w-2xl rounded-3xl border border-brand-border shadow-modal p-6 space-y-5 transform scale-95 transition-transform duration-200 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between border-b border-brand-borderLight pb-3">
+                <h3 id="modal-order-title" class="text-base font-bold text-brand-textMain">編輯訂單資料</h3>
+                <button onclick="closeModal('modal-edit-order')" class="text-brand-textMuted hover:text-brand-textMain"><i class="fa-solid fa-xmark text-lg"></i></button>
+            </div>
+            
+            <form onsubmit="handleSaveOrderSubmit(event)" class="space-y-4 text-xs">
+                <input type="hidden" id="edit-order-is-new" value="false" />
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="block font-medium text-brand-textMuted mb-1">訂單編號</label><input type="text" id="edit-order-id" class="w-full p-2.5 bg-brand-bg rounded-xl border border-brand-border font-mono text-brand-textMain" required /></div>
+                    <div><label class="block font-medium text-brand-textMuted mb-1">顧客姓名</label><input type="text" id="edit-customer-name" class="w-full p-2.5 bg-brand-bg rounded-xl border border-brand-border text-brand-textMain" required /></div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="block font-medium text-brand-textMuted mb-1">顧客 Email (身份驗證)</label><input type="email" id="edit-customer-email" class="w-full p-2.5 bg-brand-bg rounded-xl border border-brand-border text-brand-textMain" required /></div>
+                    <div><label class="block font-medium text-brand-textMuted mb-1">聯絡電話</label><input type="text" id="edit-customer-phone" class="w-full p-2.5 bg-brand-bg rounded-xl border border-brand-border text-brand-textMain" /></div>
+                </div>
+                <div class="grid grid-cols-2 gap-3">
+                    <div><label class="block font-medium text-brand-textMuted mb-1">物流承運商</label><input type="text" id="edit-carrier" placeholder="選填" class="w-full p-2.5 bg-brand-bg rounded-xl border border-brand-border text-brand-textMain" /></div>
+                    <div><label class="block font-medium text-brand-textMuted mb-1">物流追蹤單號</label><input type="text" id="edit-tracking-no" placeholder="選填" class="w-full p-2.5 bg-brand-bg rounded-xl border border-brand-border font-mono text-brand-textMain" /></div>
+                </div>
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    <div><label class="block font-medium text-brand-textMuted mb-1">預估到貨 ETA</label><input type="text" id="edit-eta" placeholder="例如：11 月上旬" class="w-full p-2.5 bg-brand-bg rounded-xl border border-brand-border text-brand-textMain" /></div>
+                    <div><label class="block font-medium text-brand-textMuted mb-1">訂單狀態</label><select id="edit-attention-status" class="w-full p-2.5 bg-brand-bg rounded-xl border border-brand-border text-brand-textMain"><option value="normal">正常</option><option value="attention">需要注意</option><option value="abnormal">異常處理</option><option value="cancelled">已取消</option></select></div>
+                </div>
+
+                <!-- 商品明細編輯區塊 -->
+                <div class="space-y-2 border-t border-brand-borderLight pt-3">
+                    <div class="flex items-center justify-between">
+                        <label class="font-bold text-brand-textMain uppercase tracking-wider">📦 購買商品明細</label>
+                        <button type="button" onclick="addItemRow()" class="px-2.5 py-1 bg-brand-surface hover:bg-brand-border text-brand-textMain rounded-lg transition font-medium">+ 新增商品</button>
+                    </div>
+                    <div id="edit-items-container" class="space-y-2 max-h-48 overflow-y-auto pr-1">
+                        <!-- 動態插入商品列 -->
+                    </div>
+                    <div class="grid grid-cols-3 gap-2 pt-2 text-right">
+                        <div><label class="block text-[10px] text-brand-textMuted">小計 Subtotal</label><input type="number" id="edit-subtotal" class="w-full p-2 bg-brand-bg rounded-xl border border-brand-border font-mono text-right" readonly /></div>
+                        <div><label class="block text-[10px] text-brand-textMuted">運費 Shipping</label><input type="number" id="edit-shipping" value="0" oninput="recalcOrderTotal()" class="w-full p-2 bg-brand-bg rounded-xl border border-brand-border font-mono text-right" /></div>
+                        <div><label class="block text-[10px] text-brand-textMuted font-bold">總計 Total</label><input type="number" id="edit-total" class="w-full p-2 bg-brand-surface font-bold font-mono text-right border border-brand-border" readonly /></div>
+                    </div>
+                </div>
+
+                <div>
+                    <label class="block font-medium text-brand-textMuted mb-1">當前進度階段</label>
+                    <select id="edit-current-stage" data-original-stage="" class="w-full p-2.5 bg-brand-bg rounded-xl border border-brand-border font-medium text-brand-textMain focus:outline-none"></select>
+                </div>
+                <div>
+                    <div class="flex items-center justify-between mb-1.5"><label class="block font-medium text-brand-textMuted">多軌動態歷程設定</label><div class="flex items-center gap-1.5"><button type="button" onclick="applyWorkflowPreset('standard')" class="px-2 py-1 bg-brand-surface hover:bg-brand-border text-brand-textMain text-[10px] rounded transition">常態商品</button><button type="button" onclick="applyWorkflowPreset('event')" class="px-2 py-1 bg-brand-surface hover:bg-brand-border text-brand-textMain text-[10px] rounded transition">活動商品</button></div></div>
+                    <div class="p-3 bg-brand-bg rounded-xl border border-brand-border">
+                        <label class="flex items-center gap-2 cursor-pointer text-xs font-bold text-brand-textMain border-b border-brand-borderLight pb-2 mb-2"><input type="checkbox" id="wf-select-all" onchange="toggleAllWorkflowStages(this)" class="rounded border-gray-300 text-brand-surfaceDark focus:ring-0 cursor-pointer" /><span>全選所有階段</span></label>
+                        <div id="edit-workflow-checkboxes" class="max-h-32 overflow-y-auto space-y-2 pr-1"></div>
+                    </div>
+                </div>
+                <div>
+                    <label class="block font-medium text-brand-textMuted mb-1">📝 訂單備註 (僅後台可見)</label>
+                    <textarea id="edit-order-notes" rows="2" placeholder="例如：易碎物品加強包裝..." class="w-full p-2.5 bg-brand-bg rounded-xl border border-brand-border text-brand-textMain focus:outline-none"></textarea>
+                </div>
+                <div class="flex items-center gap-2 pt-2"><button type="button" onclick="closeModal('modal-edit-order')" class="w-1/2 py-2.5 rounded-xl bg-brand-surface font-medium hover:bg-brand-border transition">取消</button><button type="submit" class="w-1/2 py-2.5 rounded-xl bg-brand-surfaceDark text-white font-medium hover:bg-brand-surfaceHover transition">儲存變更</button></div>
+            </form>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT CORE LOGIC WITH CLOUD DB INTEGRATION -->
+    <script>
+        const API_URL = "https://script.google.com/macros/s/AKfycbwmnwkrpM3k0_trsKwjdJf8cwlNSF-AaYWvz2G4i00Ec_VY4F5dn9_M64bmCbKxp7ORgg/exec"; 
+        
+        let ADMIN_KEY = localStorage.getItem('bec_admin_key') || '';
+
+        // 🌟 嚴格控制：頁面載入時，若 LocalStorage 裡有記錄，必須透過後端驗證成功才放行，絕不因空值自動登入
+        document.addEventListener('DOMContentLoaded', () => {
+            if (ADMIN_KEY && ADMIN_KEY.trim() !== '') {
+                verifyAdminPassword(true); 
+            }
+        });
+
+        async function verifyAdminPassword(isAuto = false) {
+            const passwordInput = document.getElementById('admin-password-input');
+            let password = '';
+
+            if (isAuto) {
+                password = ADMIN_KEY;
+            } else {
+                password = passwordInput.value.trim();
+                if (!password) {
+                    alert("請輸入管理員密碼");
+                    return;
+                }
+            }
+
+            if (!password) return;
+
+            const errEl = document.getElementById('auth-error-msg');
+            errEl.classList.add('hidden');
+
+            try {
+                const res = await fetch(`${API_URL}?key=${encodeURIComponent(password)}&t=` + new Date().getTime(), { cache: 'no-store' });
+                const data = await res.json();
+
+                if (data.success) {
+                    ADMIN_KEY = password;
+                    localStorage.setItem('bec_admin_key', password);
+                    document.getElementById('admin-auth-overlay').classList.add('hidden');
+                    
+                    globalOrders = data.orders || [];
+                    globalStages = data.stages && data.stages.length > 0 ? data.stages : DEFAULT_STAGES;
+                    globalAnnouncement = data.announcement || { active: true, text: '' };
+                    auditLog = data.auditLog || [];
+
+                    normalizeOrders();
+                    updateMetrics();
+                    renderAdminFilterTabs();
+                    renderAdminTable();
+                    renderAnnouncement();
+                    renderTodayWorkspace();
+                    showToast("後台解鎖成功，已連線雲端");
+                } else {
+                    if (!isAuto) {
+                        errEl.classList.remove('hidden');
+                    } else {
+                        // 自動登入失敗代表 key 過期或被改掉，清除並停留在輸入畫面
+                        localStorage.removeItem('bec_admin_key');
+                        document.getElementById('admin-auth-overlay').classList.remove('hidden');
+                    }
+                }
+            } catch (e) {
+                console.error(e);
+                if (!isAuto) alert("驗證連線失敗，請檢查網路或 API 網址");
+            }
+        }
+
+        const DEFAULT_STAGES = [
+            { id: 'created', label: '訂單成立', icon: 'fa-file-lines', desc: '訂單系統已成功建立紀錄', color: 'bg-stone-100 text-stone-700' },
+            { id: 'payment_verified', label: '付款確認', icon: 'fa-credit-card', desc: '金流款項已核對無誤', color: 'bg-emerald-50 text-emerald-700' },
+            { id: 'order_confirmation', label: '訂單確認中', icon: 'fa-circle-check', desc: '專員正在核對採購品項與數量', color: 'bg-blue-50 text-blue-700' },
+            { id: 'processing', label: '商品備貨', icon: 'fa-boxes-packing', desc: '倉庫正在進行商品盤點與整備', color: 'bg-amber-50 text-amber-700' },
+            { id: 'order_confirmed', label: '訂單確認完成', icon: 'fa-circle-check', desc: '品項確認無誤，準備進入採購流程', color: 'bg-indigo-50 text-indigo-700' },
+            { id: 'purchasing', label: '採購中', icon: 'fa-cart-shopping', desc: 'BEC採購團隊努力採購中', color: 'bg-purple-50 text-purple-700' },
+            { id: 'order_confirmed_event', label: '訂單確認完成 - 活動現場', icon: 'fa-ticket', desc: '等待開賣', color: 'bg-pink-50 text-pink-700' },
+            { id: 'done_purchasing', label: '採購完成', icon: 'fa-boxes-packing', desc: '所有商品皆已採購成功', color: 'bg-teal-50 text-teal-700' },
+            { id: 'to_ship_outside_tw', label: '前往BEC海外轉運站', icon: 'fa-truck-fast', desc: '當地包裹已發往海外轉運中心', color: 'bg-cyan-50 text-cyan-700' },
+            { id: 'in_ship_outside_tw', label: '抵達BEC海外轉運站', icon: 'fa-warehouse', desc: '海外轉運站入庫簽收完成，準備登機', color: 'bg-sky-50 text-sky-700' },
+            // 🌟 確保這裡的 icon 是 fa-plane
+            { id: 'departure_fast', label: '包裹翱翔中', icon: 'fa-plane', desc: '搭乘國際航班飛往台灣 hub！', color: 'bg-violet-50 text-violet-700' },
+            { id: 'arrived_tw_hub', label: '包裹已抵達BEC台灣站', icon: 'fa-warehouse', desc: '商品檢驗、準備包裝出貨', color: 'bg-lime-50 text-lime-700' },
+            { id: 'shipped', label: '包裹已出貨', icon: 'fa-truck-fast', desc: '已交由國內物流業者進行最後派送', color: 'bg-orange-50 text-orange-700' },
+            { id: 'delivered', label: '已配送至指定超商/取貨點', icon: 'fa-store', desc: '包裹已順利送達，請撥空前往取件', color: 'bg-green-100 text-green-800' }
+        ];
+
+        let globalStages = DEFAULT_STAGES;
+        let globalOrders = [];
+        let auditLog = [];
+        let globalAnnouncement = { active: true, text: '' };
+        
+        const STALE_HOURS = 48;
+        let activeDrawerOrderId = null;
+        let currentAdminFilter = 'all';
+        let selectedOrderIds = new Set();
+
+        async function fetchDatabaseInit() {
+            document.getElementById('admin-table-body').innerHTML = `<tr><td colspan="7" class="py-12 text-center text-brand-textMuted"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2 block"></i>正在從雲端載入最新訂單...</td></tr>`;
+            
+            try {
+                const response = await fetch(API_URL + "?key=" + encodeURIComponent(ADMIN_KEY) + "&t=" + new Date().getTime(), { cache: 'no-store' });
+                const data = await response.json();
+                
+                if (!data.success) {
+                    alert("密鑰失效或權限不足，請重新登入");
+                    localStorage.removeItem('bec_admin_key');
+                    location.reload();
+                    return;
+                }
+
+                globalOrders = data.orders || [];
+                globalStages = data.stages && data.stages.length > 0 ? data.stages : DEFAULT_STAGES;
+                globalAnnouncement = data.announcement || { active: true, text: '' };
+                auditLog = data.auditLog || [];
+
+                normalizeOrders();
+                updateMetrics();
+                renderAdminFilterTabs();
+                renderAdminTable();
+                renderAnnouncement();
+                renderTodayWorkspace();
+                showToast("雲端資料同步完成");
+            } catch (error) {
+                console.error(error);
+                document.getElementById('admin-table-body').innerHTML = `<tr><td colspan="7" class="py-12 text-center text-red-600"><i class="fa-solid fa-triangle-exclamation text-2xl mb-2 block"></i>無法連線到雲端資料庫，請檢查 API 網址或網路。</td></tr>`;
+            }
+        }
+
+        async function saveToStorage() {
+            const payload = {
+                adminKey: ADMIN_KEY,
+                orders: globalOrders,
+                stages: globalStages,
+                announcement: globalAnnouncement,
+                auditLog: auditLog
+            };
+            
+            const syncStatus = document.getElementById('cloud-sync-status');
+            syncStatus.innerHTML = `<i class="fa-solid fa-arrows-rotate fa-spin"></i> <span>儲存中...</span>`;
+            
+            try {
+                await fetch(API_URL, {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                    headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+                });
+                syncStatus.innerHTML = `<i class="fa-solid fa-cloud-check text-green-600"></i> <span class="text-green-700">已儲存至雲端</span>`;
+                setTimeout(() => { syncStatus.innerHTML = `<i class="fa-solid fa-cloud"></i> <span>已連線至雲端資料庫</span>`; }, 3000);
+            } catch (error) {
+                console.error("雲端同步失敗", error);
+                syncStatus.innerHTML = `<i class="fa-solid fa-cloud-xmark text-red-600"></i> <span class="text-red-700">雲端儲存失敗</span>`;
+                alert("資料上傳雲端失敗，請檢查網路連線");
+            }
+        }
+
+        function nowTW(){ return new Intl.DateTimeFormat('zh-TW',{timeZone:'Asia/Taipei',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hour12:false}).format(new Date()).replace(/\//g,'-'); }
+        function normalizeOrders(){ 
+            globalOrders = globalOrders.map(o => { 
+                if(!o.timeline) o.timeline = []; 
+                if(!o.workflowStages || !o.workflowStages.length) o.workflowStages = globalStages.map(s => s.id); 
+                if(!o.eta) o.eta = '依目前物流進度估算'; 
+                if(!o.attentionStatus) o.attentionStatus = 'normal'; 
+                if(!o.updatedAt) o.updatedAt = o.timeline[0]?.time || o.orderDate || nowTW(); 
+                if(!o.auditLog) o.auditLog = []; 
+                if(!o.items) o.items = [];
+                return o; 
+            }); 
+        }
+        function showToast(message) { const toast = document.createElement('div'); toast.className = 'fixed bottom-6 left-1/2 toast-slide bg-brand-surfaceDark text-white px-5 py-3 rounded-2xl shadow-modal text-xs font-medium z-50 flex items-center gap-2'; toast.innerHTML = `<i class="fa-solid fa-circle-check text-green-400"></i><span>${message}</span>`; document.body.appendChild(toast); setTimeout(() => toast.remove(), 2500); }
+        function openModal(id) { const el = document.getElementById(id); el.classList.remove('hidden'); setTimeout(() => { el.classList.remove('opacity-0'); el.firstElementChild.classList.remove('scale-95'); }, 10); }
+        function closeModal(id) { const el = document.getElementById(id); el.firstElementChild.classList.add('scale-95'); el.classList.add('opacity-0'); setTimeout(() => { el.classList.add('hidden'); }, 200); }
+
+        function renderAnnouncement() {
+            const adminText = document.getElementById('admin-announcement-text');
+            const adminToggle = document.getElementById('admin-announcement-toggle');
+            if (adminText) adminText.value = globalAnnouncement.text;
+            if (adminToggle) adminToggle.checked = globalAnnouncement.active;
+        }
+        function saveAnnouncementSettings() {
+            globalAnnouncement = { text: document.getElementById('admin-announcement-text').value.trim(), active: document.getElementById('admin-announcement-toggle').checked };
+            saveToStorage(); showToast('前台公告已同步至雲端');
+        }
+
+        function getAttentionMeta(status){ return {normal:{label:'正常',dot:'bg-emerald-500',cls:'bg-emerald-50 text-emerald-700'},attention:{label:'需要注意',dot:'bg-amber-500',cls:'bg-amber-50 text-amber-700'},abnormal:{label:'異常處理',dot:'bg-red-500',cls:'bg-red-50 text-red-700'},cancelled:{label:'已取消',dot:'bg-gray-500',cls:'bg-gray-100 text-gray-600'}}[status]||{label:'正常',dot:'bg-emerald-500',cls:'bg-emerald-50 text-emerald-700'}; }
+        function isOrderStale(order){ if(!order.updatedAt)return false; const d=new Date(order.updatedAt.replace(' ','T')); return !isNaN(d) && Date.now()-d.getTime()>STALE_HOURS*3600000; }
+        
+        function addAudit(order,action,detail=''){const entry={time:nowTW(),action,detail,orderId:order?.id||null};auditLog.unshift(entry);auditLog=auditLog.slice(0,300);if(order){order.auditLog=order.auditLog||[];order.auditLog.unshift(entry);order.auditLog=order.auditLog.slice(0,50);}}
+        function markOrderUpdated(order,action,detail=''){order.updatedAt=nowTW();addAudit(order,action,detail);}
+        
+        function renderTodayWorkspace(){
+            const el=document.getElementById('today-workspace');
+            if(!el)return;
+            document.getElementById('today-work-date').innerText=new Intl.DateTimeFormat('zh-TW',{timeZone:'Asia/Taipei',year:'numeric',month:'long',day:'numeric',weekday:'short'}).format(new Date());
+            
+            const groups=[
+                ['需注意', globalOrders.filter(o=>o.attentionStatus==='attention'), 'attention'],
+                ['異常', globalOrders.filter(o=>o.attentionStatus==='abnormal'), 'abnormal'],
+                ['48h 未更新', globalOrders.filter(isOrderStale), 'stale'],
+                ['採購處理中', globalOrders.filter(o=>['processing','purchasing'].includes(o.currentStageId)), 'pending'],
+                ['國際運輸中', globalOrders.filter(o=>['to_ship_outside_tw','in_ship_outside_tw','departure_fast','arrived_tw_hub','shipped'].includes(o.currentStageId)), 'transit']
+            ];
+            
+            el.innerHTML=groups.map(([label,items,key])=>`
+                <div onclick="setTodayFilter('${key}')" class="text-left p-3 rounded-2xl bg-brand-surface/60 border border-brand-border/50 hover:bg-brand-surface transition cursor-pointer select-none">
+                    <span class="text-[10px] text-brand-textMuted block">${label}</span>
+                    <span class="text-xl font-bold font-mono text-brand-textMain">${items.length}</span>
+                    <span class="text-[9px] text-brand-textMuted block mt-1"><i class="fa-solid fa-arrow-down mr-0.5"></i> 點擊篩選檢視</span>
+                </div>
+            `).join('');
+        }
+
+        function setTodayFilter(key){
+            currentAdminFilter = key; 
+            renderAdminFilterTabs(); 
+            renderAdminTable(); 
+            
+            const tableSection = document.querySelector('.island-card:has(table)');
+            if (tableSection) {
+                tableSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+            showToast(`已為您篩選：${ {attention:'需注意', abnormal:'異常', stale:'48h 未更新', pending:'採購處理中', transit:'國際運輸中'}[key] || key }`);
+        }
+
+        function updateMetrics() {
+            document.getElementById('metric-total').innerText = globalOrders.length;
+            document.getElementById('metric-pending').innerText = globalOrders.filter(o => ['processing', 'purchasing'].includes(o.currentStageId)).length;
+            document.getElementById('metric-transit').innerText = globalOrders.filter(o => ['to_ship_outside_tw', 'in_ship_outside_tw', 'departure_fast', 'arrived_tw_hub', 'shipped'].includes(o.currentStageId)).length;
+            document.getElementById('metric-delivered').innerText = globalOrders.filter(o => o.currentStageId === 'delivered').length;
+        }
+
+        function renderAdminFilterTabs() {
+            const container = document.getElementById('admin-filter-tabs');
+            const tabs = [ { id: 'all', label: '全部' }, { id: 'pending', label: '備貨/採購' }, { id: 'transit', label: '國際派送' }, { id: 'delivered', label: '已送達' }, { id: 'attention', label: '需注意' }, { id: 'stale', label: '48h 未更新' }, { id: 'abnormal', label: '異常' } ];
+            container.innerHTML = tabs.map(t => `<button onclick="setAdminFilter('${t.id}')" class="px-3 py-1.5 rounded-xl text-xs font-medium whitespace-nowrap transition ${currentAdminFilter === t.id ? 'bg-white text-brand-textMain shadow-sm' : 'text-brand-textMuted hover:text-brand-textMain'}">${t.label}</button>`).join('');
+        }
+        function setAdminFilter(filter) { currentAdminFilter = filter; renderAdminFilterTabs(); renderAdminTable(); }
+
+        function renderAdminTable() {
+            const tbody = document.getElementById('admin-table-body'); const searchKeyword = document.getElementById('admin-search-input').value.trim().toLowerCase();
+            let filtered = globalOrders.filter(o => {
+                const matchSearch = o.id.toLowerCase().includes(searchKeyword) || o.customerName.toLowerCase().includes(searchKeyword) || o.email.toLowerCase().includes(searchKeyword) || (o.notes && o.notes.toLowerCase().includes(searchKeyword));
+                if (!matchSearch) return false;
+                if (currentAdminFilter === 'pending') return ['processing', 'purchasing'].includes(o.currentStageId);
+                if (currentAdminFilter === 'transit') return ['to_ship_outside_tw', 'in_ship_outside_tw', 'departure_fast', 'arrived_tw_hub', 'shipped'].includes(o.currentStageId);
+                if (currentAdminFilter === 'delivered') return o.currentStageId === 'delivered';
+                if (currentAdminFilter === 'attention') return o.attentionStatus === 'attention';
+                if (currentAdminFilter === 'abnormal') return o.attentionStatus === 'abnormal';
+                if (currentAdminFilter === 'stale') return isOrderStale(o);
+                return true;
+            });
+            document.getElementById('showing-count').innerText = filtered.length;
+            if (filtered.length === 0) { tbody.innerHTML = `<tr><td colspan="7" class="py-12 text-center text-brand-textMuted"><i class="fa-solid fa-inbox text-2xl mb-2 block"></i>查無相關資料</td></tr>`; return; }
+
+            tbody.innerHTML = filtered.map(order => {
+                const isChecked = selectedOrderIds.has(order.id);
+                const notesSnippet = order.notes ? `<div class="mt-1 flex items-center gap-1 text-[10px] text-brand-textMuted bg-brand-surface px-2 py-0.5 rounded-md w-fit max-w-[200px] truncate" title="${order.notes}"><i class="fa-solid fa-pen-to-square text-[9px]"></i><span class="truncate">${order.notes}</span></div>` : '';
+                const currentStageObj = globalStages.find(s => s.id === order.currentStageId) || globalStages[0];
+                const activeStageIds = order.workflowStages && order.workflowStages.length > 0 ? order.workflowStages : globalStages.map(s => s.id);
+                if (!activeStageIds.includes(order.currentStageId)) activeStageIds.push(order.currentStageId);
+                const allowedStages = globalStages.filter(s => activeStageIds.includes(s.id));
+
+                return `<tr class="hover:bg-brand-surface/30 transition"><td class="py-3.5 px-4 text-center"><input type="checkbox" value="${order.id}" ${isChecked ? 'checked' : ''} onchange="toggleRowSelect('${order.id}')" class="rounded border-gray-300 text-brand-surfaceDark focus:ring-0 cursor-pointer"/></td><td class="py-3.5 px-4 font-mono"><button onclick="openOrderDrawer('${order.id}')" class="font-bold text-brand-textMain hover:underline text-left cursor-pointer">${order.id}</button>${notesSnippet}</td><td class="py-3.5 px-4"><div class="font-medium text-brand-textMain flex items-center gap-1.5"><span class="bec-attention-dot ${getAttentionMeta(order.attentionStatus).dot}"></span>${order.customerName}</div><div class="text-[11px] text-brand-textMuted font-mono">${order.email}</div></td><td class="py-3.5 px-4 font-mono font-medium">NT$ ${order.total}</td><td class="py-3.5 px-4"><select onchange="handleInlineStatusChange('${order.id}', this.value)" class="px-2.5 py-1.5 rounded-xl border border-transparent text-xs font-medium focus:outline-none focus:ring-1 focus:ring-brand-surfaceDark ${currentStageObj.color || 'bg-brand-surface text-brand-textMain'} cursor-pointer hover:opacity-80 transition">${allowedStages.map(s => `<option value="${s.id}" ${s.id === order.currentStageId ? 'selected' : ''} class="bg-white text-brand-textMain">${s.label}${s.id === order.currentStageId ? ' 📍' : ''}</option>`).join('')}</select></td><td class="py-3.5 px-4 text-brand-textMuted text-[11px] font-mono"><div>${order.updatedAt || order.orderDate}</div>${isOrderStale(order) ? '<span class="text-red-600">超過 48h 未更新</span>' : ''}</td><td class="py-3.5 px-4 text-right"><div class="flex items-center justify-end gap-1.5"><button onclick="window.open('index.html?order=' + '${order.id}', '_blank')" class="p-2 rounded-lg hover:bg-brand-surface text-brand-textMuted hover:text-brand-textMain transition cursor-pointer" title="前台預覽"><i class="fa-solid fa-arrow-up-right-from-square"></i></button><button onclick="openOrderDrawer('${order.id}')" class="p-2 rounded-lg hover:bg-brand-surface text-brand-textMuted hover:text-brand-textMain transition cursor-pointer" title="詳情"><i class="fa-solid fa-eye"></i></button><button onclick="openEditOrderModal('${order.id}')" class="p-2 rounded-lg hover:bg-brand-surface text-brand-textMuted hover:text-brand-textMain transition cursor-pointer" title="編輯"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="deleteSingleOrder('${order.id}')" class="p-2 rounded-lg hover:bg-red-50 text-brand-textMuted hover:text-red-600 transition cursor-pointer" title="刪除"><i class="fa-solid fa-trash-can"></i></button></div></td></tr>`;
+            }).join('');
+            updateBatchToolbarUI();
+        }
+
+        function handleInlineStatusChange(orderId, newStageId) { 
+            const order = globalOrders.find(o => o.id === orderId); if (!order) return; 
+            order.currentStageId = newStageId; 
+            const stageObj = globalStages.find(s => s.id === newStageId); 
+            order.timeline.unshift({time:nowTW(),title:stageObj?stageObj.label:newStageId,desc:'後台下拉直接更新'}); 
+            markOrderUpdated(order,'更新進度',stageObj?stageObj.label:newStageId); 
+            
+            saveToStorage(); 
+            updateMetrics(); renderAdminTable(); renderTodayWorkspace(); 
+            if(activeDrawerOrderId===orderId) renderOrderDrawer(order); 
+            showToast(`進度已更新，背景同步中...`); 
+        }
+
+        function toggleSelectAllRows(masterCb) { if (masterCb.checked) { globalOrders.forEach(o => selectedOrderIds.add(o.id)); } else { selectedOrderIds.clear(); } renderAdminTable(); }
+        function toggleRowSelect(id) { if (selectedOrderIds.has(id)) selectedOrderIds.delete(id); else selectedOrderIds.add(id); renderAdminTable(); }
+
+        function updateBatchToolbarUI() {
+            const batchBar = document.getElementById('batch-toolbar');
+            if (selectedOrderIds.size > 0) {
+                batchBar.classList.remove('hidden'); document.getElementById('batch-count').innerText = selectedOrderIds.size;
+                document.getElementById('batch-status-select').innerHTML = globalStages.map(s => `<option value="${s.id}">${s.label}</option>`).join('');
+            } else { batchBar.classList.add('hidden'); document.getElementById('batch-custom-desc').value = ''; }
+        }
+
+        function applyBatchStatusUpdate() {
+            const targetId = document.getElementById('batch-status-select').value; const customDesc = document.getElementById('batch-custom-desc').value.trim(); const stageObj = globalStages.find(s => s.id === targetId); const now = nowTW();
+            selectedOrderIds.forEach(id => {
+                const order = globalOrders.find(o => o.id === id);
+                if (order) { order.currentStageId = targetId; order.timeline.unshift({ time: now, title: stageObj ? stageObj.label : targetId, desc: customDesc || '批次變更' }); markOrderUpdated(order,'批次更新',customDesc || (stageObj ? stageObj.label : targetId)); }
+            });
+            saveToStorage(); updateMetrics(); selectedOrderIds.clear(); renderAdminTable(); renderTodayWorkspace(); showToast(`批次變更完成，背景同步中...`);
+        }
+        function applyBatchDelete() { if (!confirm(`確定刪除 ${selectedOrderIds.size} 筆訂單？`)) return; globalOrders = globalOrders.filter(o => !selectedOrderIds.has(o.id)); selectedOrderIds.clear(); saveToStorage(); updateMetrics(); renderAdminTable(); renderTodayWorkspace(); showToast('刪除完成'); }
+        function deleteSingleOrder(id) { if (!confirm(`確定刪除 ${id}？`)) return; globalOrders = globalOrders.filter(o => o.id !== id); saveToStorage(); updateMetrics(); renderAdminTable(); renderTodayWorkspace(); showToast('刪除成功'); }
+        
+        function exportToCSV() {
+            let csv = '\uFEFF訂單編號,顧客姓名,Email,電話,當前階段,管理狀態,ETA,最後更新,總金額,下單時間,備註\n';
+            globalOrders.forEach(o => { const stageObj = globalStages.find(s => s.id === o.currentStageId); csv += `"${o.id}","${o.customerName}","${o.email}","${o.phone}","${stageObj ? stageObj.label : o.currentStageId}","${getAttentionMeta(o.attentionStatus).label}","${o.eta || ''}","${o.updatedAt || ''}","${o.total}","${o.orderDate}","${o.notes || ''}"\n`; });
+            const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8;' })); a.download = `Orders_${new Date().toISOString().substring(0, 10)}.csv`; a.click();
+        }
+
+        function openOrderDrawer(orderId){
+            const order=globalOrders.find(o=>o.id===orderId);
+            if(!order) { return; }
+            activeDrawerOrderId=orderId;
+            renderOrderDrawer(order);
+            document.getElementById('order-drawer-backdrop').classList.add('is-open');
+            document.getElementById('order-detail-drawer').classList.add('is-open');
+        }
+        function closeOrderDrawer(){document.getElementById('order-drawer-backdrop')?.classList.remove('is-open');document.getElementById('order-detail-drawer')?.classList.remove('is-open');activeDrawerOrderId=null;}
+        function renderOrderDrawer(order){
+            const stage=globalStages.find(s=>s.id===order.currentStageId)||globalStages[0],meta=getAttentionMeta(order.attentionStatus);
+            let progress = 0; const ids=(order.workflowStages&&order.workflowStages.length?order.workflowStages:globalStages.map(s=>s.id)); const idx=ids.indexOf(order.currentStageId); if(idx>=0) progress = ids.length<=1 ? 100 : Math.round(idx/(ids.length-1)*100);
+            
+            document.getElementById('drawer-order-id').innerText=order.id; document.getElementById('drawer-customer').innerText=order.customerName; document.getElementById('drawer-email').innerText=order.email; 
+            document.getElementById('drawer-carrier').innerText = order.carrier || '尚未安排'; document.getElementById('drawer-tracking').innerText = order.trackingNo || '尚未成立'; 
+            document.getElementById('drawer-eta').innerText=order.eta||'—'; document.getElementById('drawer-updated').innerText=order.updatedAt||order.orderDate; document.getElementById('drawer-progress').innerText=`${progress}%`;document.getElementById('drawer-progress-bar').style.width=`${progress}%`;
+            document.getElementById('drawer-summary').innerHTML=`<div class="p-3 rounded-xl bg-brand-surface"><span class="text-[10px] text-brand-textMuted block">目前階段</span><b class="text-xs">${stage.label}</b></div><div class="p-3 rounded-xl ${meta.cls}"><span class="text-[10px] opacity-70 block">管理狀態</span><b class="text-xs">${meta.label}</b></div>`;
+            document.getElementById('drawer-status-box').innerHTML=`<div class="flex items-center gap-2"><span class="bec-attention-dot ${meta.dot}"></span><b>${meta.label}</b>${isOrderStale(order)?'<span class="ml-auto text-red-600">48h 未更新</span>':''}</div>`;
+            document.getElementById('drawer-audit-log').innerHTML=(order.auditLog||[]).slice(0,12).map(a=>`<div class="p-2.5 rounded-xl bg-brand-bg border border-brand-border text-[10px]"><div class="flex justify-between gap-2"><b>${a.action}</b><span class="font-mono text-brand-textMuted">${a.time}</span></div><p class="text-brand-textMuted mt-1">${a.detail||''}</p></div>`).join('')||'<p class="text-[10px] text-brand-textMuted">無紀錄</p>';
+            document.getElementById('drawer-timeline').innerHTML=(order.timeline||[]).slice(0,15).map(t=>`<div class="flex gap-2 p-2.5 rounded-xl bg-brand-surface/60"><span class="w-1.5 h-1.5 rounded-full bg-brand-surfaceDark mt-1.5 shrink-0"></span><div><b class="text-[11px]">${t.title}</b><span class="text-[9px] text-brand-textMuted font-mono ml-2">${t.time}</span><p class="text-[10px] text-brand-textMuted mt-0.5">${t.desc||''}</p></div></div>`).join('');
+            document.getElementById('drawer-edit-btn').onclick=()=>{closeOrderDrawer();openEditOrderModal(order.id)};
+        }
+        function moveOrderStage(direction){const order=globalOrders.find(o=>o.id===activeDrawerOrderId);if(!order)return;const ids=(order.workflowStages&&order.workflowStages.length?order.workflowStages:globalStages.map(s=>s.id)),idx=ids.indexOf(order.currentStageId),target=ids[idx+direction];if(!target){showToast('已達邊界');return;}order.currentStageId=target;const st=globalStages.find(s=>s.id===target);order.timeline.unshift({time:nowTW(),title:st?.label||target,desc:'快捷切換'});markOrderUpdated(order,'快捷切換',st?.label||target);saveToStorage();updateMetrics();renderAdminTable();renderTodayWorkspace();renderOrderDrawer(order);}
+
+        function openStageManagerModal() { renderStageManagerList(); openModal('modal-stage-manager'); }
+        function renderStageManagerList() {
+            document.getElementById('stage-manager-list').innerHTML = globalStages.map((stage, idx) => `
+                <div draggable="true" ondragstart="handleStageDragStart(event, ${idx})" ondragover="handleStageDragOver(event)" ondragenter="handleStageDragEnter(event)" ondragleave="handleStageDragLeave(event)" ondrop="handleStageDrop(event, ${idx})" ondragend="handleStageDragEnd(event)" class="flex items-center justify-between p-3 bg-brand-bg rounded-2xl border border-brand-border text-xs gap-2 cursor-move transition-all duration-200">
+                    <div class="flex items-center gap-3 pointer-events-none"><i class="fa-solid fa-grip-vertical text-brand-textMuted/40 text-sm pl-1 pr-2"></i><div class="w-8 h-8 rounded-xl ${stage.color || 'bg-brand-surface text-brand-textMain'} flex items-center justify-center shadow-sm"><i class="fa-solid ${stage.icon}"></i></div><div><span class="font-bold text-brand-textMain">${stage.label}</span><span class="text-[10px] text-brand-textMuted font-mono ml-1.5">(${stage.id})</span><p class="text-[11px] text-brand-textMuted mt-0.5">${stage.desc}</p></div></div>
+                    <div class="flex items-center gap-1"><button onclick="deleteStage(${idx})" class="p-2 hover:bg-red-50 text-brand-textMuted hover:text-red-600 rounded-lg transition"><i class="fa-solid fa-trash-can"></i></button></div>
+                </div>`).join('');
+        }
+        let draggedStageIdx = null;
+        function handleStageDragStart(e, idx) { draggedStageIdx = idx; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', idx); setTimeout(() => e.target.classList.add('opacity-40'), 10); }
+        function handleStageDragOver(e) { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; return false; }
+        function handleStageDragEnter(e) { e.preventDefault(); e.currentTarget.classList.add('border-brand-textMuted', 'border-dashed', 'bg-brand-surface'); }
+        function handleStageDragLeave(e) { e.currentTarget.classList.remove('border-brand-textMuted', 'border-dashed', 'bg-brand-surface'); }
+        function handleStageDrop(e, targetIdx) { e.stopPropagation(); e.currentTarget.classList.remove('border-brand-textMuted', 'border-dashed', 'bg-brand-surface'); if (draggedStageIdx !== null && draggedStageIdx !== targetIdx) { const item = globalStages.splice(draggedStageIdx, 1)[0]; globalStages.splice(targetIdx, 0, item); saveToStorage(); renderStageManagerList(); renderAdminTable(); } return false; }
+        function handleStageDragEnd(e) { e.target.classList.remove('opacity-40'); draggedStageIdx = null; }
+        function deleteStage(idx) { if (globalStages.length <= 1) return; globalStages.splice(idx, 1); saveToStorage(); renderStageManagerList(); renderAdminTable(); }
+        function handleAddNewStage(e) {
+            e.preventDefault(); const id = document.getElementById('new-stage-id').value.trim(); const label = document.getElementById('new-stage-label').value.trim();
+            if (globalStages.some(s => s.id === id)) { alert('代碼已存在'); return; }
+            globalStages.push({ id, label, icon: document.getElementById('new-stage-icon').value, desc: document.getElementById('new-stage-desc').value.trim(), color: 'bg-emerald-50 text-emerald-700' });
+            saveToStorage(); renderStageManagerList(); renderAdminTable(); document.getElementById('new-stage-id').value = ''; document.getElementById('new-stage-label').value = ''; document.getElementById('new-stage-desc').value = '';
+        }
+
+        function renderEditItems(items = []) {
+            const container = document.getElementById('edit-items-container');
+            container.innerHTML = items.map((item, idx) => `
+                <div class="flex items-center gap-2 item-row bg-brand-bg p-2 rounded-xl border border-brand-border">
+                    <input type="text" placeholder="商品名稱" value="${item.name || ''}" class="item-name flex-1 p-1.5 bg-white rounded-lg border border-brand-border text-xs" required />
+                    <input type="number" placeholder="數量" value="${item.qty || 1}" min="1" oninput="recalcOrderTotal()" class="item-qty w-16 p-1.5 bg-white rounded-lg border border-brand-border text-xs font-mono text-center" required />
+                    <input type="number" placeholder="單價" value="${item.price || 0}" min="0" oninput="recalcOrderTotal()" class="item-price w-24 p-1.5 bg-white rounded-lg border border-brand-border text-xs font-mono text-right" required />
+                    <button type="button" onclick="this.closest('.item-row').remove(); recalcOrderTotal();" class="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded-lg"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+            `).join('');
+            recalcOrderTotal();
+        }
+
+        function addItemRow() {
+            const container = document.getElementById('edit-items-container');
+            const div = document.createElement('div');
+            div.className = "flex items-center gap-2 item-row bg-brand-bg p-2 rounded-xl border border-brand-border";
+            div.innerHTML = `
+                <input type="text" placeholder="商品名稱" class="item-name flex-1 p-1.5 bg-white rounded-lg border border-brand-border text-xs" required />
+                <input type="number" placeholder="數量" value="1" min="1" oninput="recalcOrderTotal()" class="item-qty w-16 p-1.5 bg-white rounded-lg border border-brand-border text-xs font-mono text-center" required />
+                <input type="number" placeholder="單價" value="0" min="0" oninput="recalcOrderTotal()" class="item-price w-24 p-1.5 bg-white rounded-lg border border-brand-border text-xs font-mono text-right" required />
+                <button type="button" onclick="this.closest('.item-row').remove(); recalcOrderTotal();" class="p-1.5 hover:bg-red-50 text-gray-400 hover:text-red-600 rounded-lg"><i class="fa-solid fa-xmark"></i></button>
+            `;
+            container.appendChild(div);
+            recalcOrderTotal();
+        }
+
+        function recalcOrderTotal() {
+            let subtotal = 0;
+            document.querySelectorAll('.item-row').forEach(row => {
+                const qty = parseFloat(row.querySelector('.item-qty').value) || 0;
+                const price = parseFloat(row.querySelector('.item-price').value) || 0;
+                subtotal += qty * price;
+            });
+            const shipping = parseFloat(document.getElementById('edit-shipping').value) || 0;
+            document.getElementById('edit-subtotal').value = subtotal;
+            document.getElementById('edit-total').value = subtotal + shipping;
+        }
+
+        function openNewOrderModal() {
+            document.getElementById('modal-order-title').innerText = '新增訂單'; document.getElementById('edit-order-is-new').value = 'true';
+            document.getElementById('edit-order-id').value = `#BEC-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+            ['edit-customer-name', 'edit-customer-email', 'edit-customer-phone', 'edit-carrier', 'edit-tracking-no', 'edit-order-notes'].forEach(id => document.getElementById(id).value = '');
+            document.getElementById('edit-eta').value = '依目前物流進度估算'; document.getElementById('edit-attention-status').value='normal';
+            document.getElementById('edit-shipping').value = 0;
+            renderEditItems([{ name: '精選預購商品', qty: 1, price: 0 }]);
+            document.getElementById('edit-current-stage').dataset.originalStage = 'created';
+            renderWorkflowCheckboxes(globalStages.map(s => s.id)); syncCurrentStageDropdown('created'); openModal('modal-edit-order');
+        }
+
+        function openEditOrderModal(orderId) {
+            const order = globalOrders.find(o => o.id === orderId); if (!order) return;
+            document.getElementById('modal-order-title').innerText = `編輯訂單 ${order.id}`; document.getElementById('edit-order-is-new').value = 'false';
+            document.getElementById('edit-order-id').value = order.id; document.getElementById('edit-customer-name').value = order.customerName; document.getElementById('edit-customer-email').value = order.email; document.getElementById('edit-customer-phone').value = order.phone;
+            document.getElementById('edit-carrier').value = order.carrier || ''; document.getElementById('edit-tracking-no').value = order.trackingNo || '';
+            document.getElementById('edit-eta').value = order.eta || ''; document.getElementById('edit-attention-status').value=order.attentionStatus || 'normal'; document.getElementById('edit-order-notes').value = order.notes || '';
+            document.getElementById('edit-shipping').value = order.shipping || 0;
+            renderEditItems(order.items || []);
+            document.getElementById('edit-current-stage').dataset.originalStage = order.currentStageId;
+            renderWorkflowCheckboxes(order.workflowStages && order.workflowStages.length > 0 ? order.workflowStages : globalStages.map(s => s.id));
+            syncCurrentStageDropdown(order.currentStageId); openModal('modal-edit-order');
+        }
+
+        function syncCurrentStageDropdown(preSelectedId = null) {
+            const select = document.getElementById('edit-current-stage'); const originalStage = select.dataset.originalStage; const currentVal = preSelectedId || select.value || originalStage;
+            const checkedBoxes = Array.from(document.querySelectorAll('.wf-checkbox:checked')).map(cb => cb.value);
+            if (originalStage && !checkedBoxes.includes(originalStage)) checkedBoxes.push(originalStage);
+            const validStages = globalStages.filter(s => checkedBoxes.includes(s.id));
+            let targetVal = currentVal; if (!validStages.some(s => s.id === targetVal)) targetVal = originalStage && validStages.some(s => s.id === originalStage) ? originalStage : (validStages[0] ? validStages[0].id : '');
+            select.innerHTML = validStages.map(s => `<option value="${s.id}" ${s.id === targetVal ? 'selected' : ''}>${s.label}${s.id === originalStage ? ' 📍' : ''}</option>`).join('');
+        }
+
+        function renderWorkflowCheckboxes(selectedStageIds) {
+            document.getElementById('edit-workflow-checkboxes').innerHTML = globalStages.map(s => `<label class="flex items-center gap-2 cursor-pointer text-xs text-brand-textMain hover:bg-brand-surface p-1 rounded transition"><input type="checkbox" value="${s.id}" ${selectedStageIds.includes(s.id) ? 'checked' : ''} onchange="handleWorkflowCheckboxChange()" class="wf-checkbox rounded border-gray-300 text-brand-surfaceDark focus:ring-0 cursor-pointer" /><span>${s.label}</span></label>`).join('');
+            updateWorkflowSelectAllState();
+        }
+        function handleWorkflowCheckboxChange() { updateWorkflowSelectAllState(); syncCurrentStageDropdown(); }
+        function updateWorkflowSelectAllState() { const checkboxes = document.querySelectorAll('.wf-checkbox'); document.getElementById('wf-select-all').checked = checkboxes.length > 0 && checkboxes.length === document.querySelectorAll('.wf-checkbox:checked').length; }
+        function toggleAllWorkflowStages(masterCheckbox) { document.querySelectorAll('.wf-checkbox').forEach(cb => cb.checked = masterCheckbox.checked); syncCurrentStageDropdown(); }
+        function applyWorkflowPreset(type) {
+            const presetIds = type === 'standard' ? ['created', 'payment_verified', 'order_confirmation', 'order_confirmed', 'purchasing', 'done_purchasing', 'to_ship_outside_tw', 'in_ship_outside_tw', 'departure_fast', 'arrived_tw_hub', 'shipped', 'delivered'] : ['created', 'payment_verified', 'order_confirmation', 'order_confirmed_event', 'done_purchasing', 'to_ship_outside_tw', 'in_ship_outside_tw', 'departure_fast', 'arrived_tw_hub', 'shipped', 'delivered'];
+            renderWorkflowCheckboxes(presetIds.filter(id => globalStages.some(s => s.id === id))); syncCurrentStageDropdown(); showToast('套用成功');
+        }
+
+        function handleSaveOrderSubmit(e) {
+            e.preventDefault();
+            const orderId = document.getElementById('edit-order-id').value.trim();
+            const carrier = document.getElementById('edit-carrier').value.trim();
+            const trackingNo = document.getElementById('edit-tracking-no').value.trim();
+            const workflowStages = Array.from(document.querySelectorAll('.wf-checkbox:checked')).map(cb => cb.value);
+            if (workflowStages.length === 0) { alert('至少需勾選一項歷程階段！'); return; }
+
+            let items = [];
+            let subtotal = 0;
+            document.querySelectorAll('.item-row').forEach(row => {
+                const name = row.querySelector('.item-name').value.trim();
+                const qty = parseInt(row.querySelector('.item-qty').value) || 1;
+                const price = parseFloat(row.querySelector('.item-price').value) || 0;
+                if(name) {
+                    items.push({ name, qty, price });
+                    subtotal += qty * price;
+                }
+            });
+            const shipping = parseFloat(document.getElementById('edit-shipping').value) || 0;
+            const total = subtotal + shipping;
+
+            const now = nowTW();
+            if (document.getElementById('edit-order-is-new').value === 'true') {
+                globalOrders.unshift({
+                    id: orderId, customerName: document.getElementById('edit-customer-name').value.trim(), email: document.getElementById('edit-customer-email').value.trim(), phone: document.getElementById('edit-customer-phone').value.trim(),
+                    carrier, trackingNo, eta: document.getElementById('edit-eta').value.trim() || '依目前物流進度估算', attentionStatus: document.getElementById('edit-attention-status').value, updatedAt:now, orderDate: now,
+                    currentStageId: document.getElementById('edit-current-stage').value, notes: document.getElementById('edit-order-notes').value.trim(), workflowStages, items, subtotal, shipping, total, timeline: [{ time: now, title: '訂單成立', desc: '系統建檔' }], auditLog: []
+                });
+            } else {
+                const order = globalOrders.find(o => o.id === orderId);
+                if (order) {
+                    order.customerName = document.getElementById('edit-customer-name').value.trim(); 
+                    order.email = document.getElementById('edit-customer-email').value.trim(); 
+                    order.phone = document.getElementById('edit-customer-phone').value.trim();
+                    order.carrier = carrier; 
+                    order.trackingNo = trackingNo; 
+                    order.eta = document.getElementById('edit-eta').value.trim(); 
+                    order.attentionStatus = document.getElementById('edit-attention-status').value;
+                    
+                    order.items = items;
+                    order.subtotal = subtotal;
+                    order.shipping = shipping;
+                    order.total = total;
+
+                    const newStageId = document.getElementById('edit-current-stage').value;
+                    if (order.currentStageId !== newStageId) {
+                        const stageObj = globalStages.find(s => s.id === newStageId);
+                        order.timeline.unshift({ 
+                            time: nowTW(), 
+                            title: stageObj ? stageObj.label : newStageId, 
+                            desc: '後台編輯更新' 
+                        });
+                    }
+                    order.currentStageId = newStageId; 
+
+                    order.notes = document.getElementById('edit-order-notes').value.trim(); 
+                    order.workflowStages = workflowStages;
+                    markOrderUpdated(order, '編輯訂單', order.attentionStatus);
+                }
+            }
+            saveToStorage(); updateMetrics(); renderAdminTable(); renderTodayWorkspace(); closeModal('modal-edit-order'); showToast('儲存中...');
+        }
+    </script>
+</body>
+</html>
