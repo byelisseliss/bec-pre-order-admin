@@ -66,9 +66,8 @@
                 <h3 class="text-lg font-bold text-brand-textMain">BEC 管理員安全驗證</h3>
                 <p class="text-xs text-brand-textMuted mt-1">請輸入後台管理密碼以存取物流與訂單系統</p>
             </div>
-            <!-- 嚴格表單控制：必須點擊按鈕或按 Enter 才能送出驗證 -->
             <form onsubmit="event.preventDefault(); verifyAdminPassword(false);" class="space-y-3">
-                <input type="password" id="admin-password-input" autocomplete="new-password" placeholder="請輸入管理員密碼..." class="w-full p-3 bg-brand-bg rounded-xl border border-brand-border text-xs text-brand-textMain text-center tracking-widest focus:outline-none focus:ring-1 focus:ring-brand-surfaceDark" />
+                <input type="password" id="admin-password-input" autocomplete="new-password" readonly onfocus="this.removeAttribute('readonly');" placeholder="請輸入管理員密碼..." class="w-full p-3 bg-brand-bg rounded-xl border border-brand-border text-xs text-brand-textMain text-center tracking-widest focus:outline-none focus:ring-1 focus:ring-brand-surfaceDark" />
                 <button type="button" onclick="verifyAdminPassword(false)" class="w-full py-3 rounded-xl bg-brand-surfaceDark hover:bg-brand-surfaceHover text-white text-xs font-semibold shadow-sm transition">
                     解鎖進入後台
                 </button>
@@ -292,11 +291,29 @@
                     <div><label class="block font-medium text-brand-textMuted mb-1">顧客 Email (身份驗證)</label><input type="email" id="edit-customer-email" class="w-full p-2.5 bg-brand-bg rounded-xl border border-brand-border text-brand-textMain" required /></div>
                     <div><label class="block font-medium text-brand-textMuted mb-1">聯絡電話</label><input type="text" id="edit-customer-phone" class="w-full p-2.5 bg-brand-bg rounded-xl border border-brand-border text-brand-textMain" /></div>
                 </div>
-                <div class="grid grid-cols-2 gap-3">
-                    <div><label class="block font-medium text-brand-textMuted mb-1">物流承運商</label><input type="text" id="edit-carrier" placeholder="選填" class="w-full p-2.5 bg-brand-bg rounded-xl border border-brand-border text-brand-textMain" /></div>
-                    <div><label class="block font-medium text-brand-textMuted mb-1">物流追蹤單號</label><input type="text" id="edit-tracking-no" placeholder="選填" class="w-full p-2.5 bg-brand-bg rounded-xl border border-brand-border font-mono text-brand-textMain" /></div>
+                
+                <!-- 📦 物流承運商修改為下拉式選單與動態自訂網址 -->
+                <div class="grid grid-cols-1 gap-3">
+                    <label class="block font-medium text-brand-textMuted mb-1">物流承運商 & 追蹤單號</label>
+                    <div class="flex flex-col sm:flex-row items-center gap-2">
+                        <select id="edit-carrier" class="w-full sm:w-1/3 p-2.5 bg-brand-bg rounded-xl border border-brand-border text-brand-textMain focus:outline-none" onchange="toggleCustomTrackingUrl()">
+                            <option value="">尚未安排</option>
+                            <option value="7-11">7-11</option>
+                            <option value="全家">全家</option>
+                            <option value="順豐">順豐</option>
+                            <option value="郵局">郵局</option>
+                            <option value="其他">其他自訂物流</option>
+                        </select>
+                        <input type="text" id="edit-tracking-no" placeholder="物流單號 (選填)" class="w-full sm:w-2/3 p-2.5 bg-brand-bg rounded-xl border border-brand-border font-mono text-brand-textMain" />
+                    </div>
+                    <!-- 當選擇「其他」時才會顯示的自訂連結欄位 -->
+                    <div id="custom-tracking-url-container" class="hidden w-full mt-2 transition-all">
+                        <input type="url" id="edit-custom-tracking-url" placeholder="手動輸入其他物流的追蹤連結 (例如: https://...)" class="w-full p-2.5 bg-brand-surface rounded-xl border border-brand-border text-brand-textMain" />
+                        <p class="text-[10px] text-brand-textMuted mt-1">如果選擇「其他物流」，請在此填寫顧客點擊後會導向的網址。</p>
+                    </div>
                 </div>
-                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
                     <div><label class="block font-medium text-brand-textMuted mb-1">預估到貨 ETA</label><input type="text" id="edit-eta" placeholder="例如：11 月上旬" class="w-full p-2.5 bg-brand-bg rounded-xl border border-brand-border text-brand-textMain" /></div>
                     <div><label class="block font-medium text-brand-textMuted mb-1">訂單狀態</label><select id="edit-attention-status" class="w-full p-2.5 bg-brand-bg rounded-xl border border-brand-border text-brand-textMain"><option value="normal">正常</option><option value="attention">需要注意</option><option value="abnormal">異常處理</option><option value="cancelled">已取消</option></select></div>
                 </div>
@@ -343,7 +360,6 @@
         
         let ADMIN_KEY = localStorage.getItem('bec_admin_key') || '';
 
-        // 🌟 嚴格控制：頁面載入時，若 LocalStorage 裡有記錄，必須透過後端驗證成功才放行，絕不因空值自動登入
         document.addEventListener('DOMContentLoaded', () => {
             if (ADMIN_KEY && ADMIN_KEY.trim() !== '') {
                 verifyAdminPassword(true); 
@@ -394,7 +410,6 @@
                     if (!isAuto) {
                         errEl.classList.remove('hidden');
                     } else {
-                        // 自動登入失敗代表 key 過期或被改掉，清除並停留在輸入畫面
                         localStorage.removeItem('bec_admin_key');
                         document.getElementById('admin-auth-overlay').classList.remove('hidden');
                     }
@@ -416,7 +431,6 @@
             { id: 'done_purchasing', label: '採購完成', icon: 'fa-boxes-packing', desc: '所有商品皆已採購成功', color: 'bg-teal-50 text-teal-700' },
             { id: 'to_ship_outside_tw', label: '前往BEC海外轉運站', icon: 'fa-truck-fast', desc: '當地包裹已發往海外轉運中心', color: 'bg-cyan-50 text-cyan-700' },
             { id: 'in_ship_outside_tw', label: '抵達BEC海外轉運站', icon: 'fa-warehouse', desc: '海外轉運站入庫簽收完成，準備登機', color: 'bg-sky-50 text-sky-700' },
-            // 🌟 確保這裡的 icon 是 fa-plane
             { id: 'departure_fast', label: '包裹翱翔中', icon: 'fa-plane', desc: '搭乘國際航班飛往台灣 hub！', color: 'bg-violet-50 text-violet-700' },
             { id: 'arrived_tw_hub', label: '包裹已抵達BEC台灣站', icon: 'fa-warehouse', desc: '商品檢驗、準備包裝出貨', color: 'bg-lime-50 text-lime-700' },
             { id: 'shipped', label: '包裹已出貨', icon: 'fa-truck-fast', desc: '已交由國內物流業者進行最後派送', color: 'bg-orange-50 text-orange-700' },
@@ -502,6 +516,8 @@
                 if(!o.updatedAt) o.updatedAt = o.timeline[0]?.time || o.orderDate || nowTW(); 
                 if(!o.auditLog) o.auditLog = []; 
                 if(!o.items) o.items = [];
+                // 初始化自訂網址屬性
+                if(o.customTrackingUrl === undefined) o.customTrackingUrl = '';
                 return o; 
             }); 
         }
@@ -598,7 +614,7 @@
                 if (!activeStageIds.includes(order.currentStageId)) activeStageIds.push(order.currentStageId);
                 const allowedStages = globalStages.filter(s => activeStageIds.includes(s.id));
 
-                return `<tr class="hover:bg-brand-surface/30 transition"><td class="py-3.5 px-4 text-center"><input type="checkbox" value="${order.id}" ${isChecked ? 'checked' : ''} onchange="toggleRowSelect('${order.id}')" class="rounded border-gray-300 text-brand-surfaceDark focus:ring-0 cursor-pointer"/></td><td class="py-3.5 px-4 font-mono"><button onclick="openOrderDrawer('${order.id}')" class="font-bold text-brand-textMain hover:underline text-left cursor-pointer">${order.id}</button>${notesSnippet}</td><td class="py-3.5 px-4"><div class="font-medium text-brand-textMain flex items-center gap-1.5"><span class="bec-attention-dot ${getAttentionMeta(order.attentionStatus).dot}"></span>${order.customerName}</div><div class="text-[11px] text-brand-textMuted font-mono">${order.email}</div></td><td class="py-3.5 px-4 font-mono font-medium">NT$ ${order.total}</td><td class="py-3.5 px-4"><select onchange="handleInlineStatusChange('${order.id}', this.value)" class="px-2.5 py-1.5 rounded-xl border border-transparent text-xs font-medium focus:outline-none focus:ring-1 focus:ring-brand-surfaceDark ${currentStageObj.color || 'bg-brand-surface text-brand-textMain'} cursor-pointer hover:opacity-80 transition">${allowedStages.map(s => `<option value="${s.id}" ${s.id === order.currentStageId ? 'selected' : ''} class="bg-white text-brand-textMain">${s.label}${s.id === order.currentStageId ? ' 📍' : ''}</option>`).join('')}</select></td><td class="py-3.5 px-4 text-brand-textMuted text-[11px] font-mono"><div>${order.updatedAt || order.orderDate}</div>${isOrderStale(order) ? '<span class="text-red-600">超過 48h 未更新</span>' : ''}</td><td class="py-3.5 px-4 text-right"><div class="flex items-center justify-end gap-1.5"><button onclick="window.open('index.html?order=' + '${order.id}', '_blank')" class="p-2 rounded-lg hover:bg-brand-surface text-brand-textMuted hover:text-brand-textMain transition cursor-pointer" title="前台預覽"><i class="fa-solid fa-arrow-up-right-from-square"></i></button><button onclick="openOrderDrawer('${order.id}')" class="p-2 rounded-lg hover:bg-brand-surface text-brand-textMuted hover:text-brand-textMain transition cursor-pointer" title="詳情"><i class="fa-solid fa-eye"></i></button><button onclick="openEditOrderModal('${order.id}')" class="p-2 rounded-lg hover:bg-brand-surface text-brand-textMuted hover:text-brand-textMain transition cursor-pointer" title="編輯"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="deleteSingleOrder('${order.id}')" class="p-2 rounded-lg hover:bg-red-50 text-brand-textMuted hover:text-red-600 transition cursor-pointer" title="刪除"><i class="fa-solid fa-trash-can"></i></button></div></td></tr>`;
+                return `<tr class="hover:bg-brand-surface/30 transition"><td class="py-3.5 px-4 text-center"><input type="checkbox" value="${order.id}" ${isChecked ? 'checked' : ''} onchange="toggleRowSelect('${order.id}')" class="rounded border-gray-300 text-brand-surfaceDark focus:ring-0 cursor-pointer"/></td><td class="py-3.5 px-4 font-mono"><button onclick="openOrderDrawer('${order.id}')" class="font-bold text-brand-textMain hover:underline text-left cursor-pointer">${order.id}</button>${notesSnippet}</td><td class="py-3.5 px-4"><div class="font-medium text-brand-textMain flex items-center gap-1.5"><span class="bec-attention-dot ${getAttentionMeta(order.attentionStatus).dot}"></span>${order.customerName}</div><div class="text-[11px] text-brand-textMuted font-mono">${order.email}</div></td><td class="py-3.5 px-4 font-mono font-medium">NT$ ${order.total}</td><td class="py-3.5 px-4"><select onchange="handleInlineStatusChange('${order.id}', this.value)" class="px-2.5 py-1.5 rounded-xl border border-transparent text-xs font-medium focus:outline-none focus:ring-1 focus:ring-brand-surfaceDark ${currentStageObj.color || 'bg-brand-surface text-brand-textMain'} cursor-pointer hover:opacity-80 transition">${allowedStages.map(s => `<option value="${s.id}" ${s.id === order.currentStageId ? 'selected' : ''} class="bg-white text-brand-textMain">${s.label}${s.id === order.currentStageId ? ' 📍' : ''}</option>`).join('')}</select></td><td class="py-3.5 px-4 text-brand-textMuted text-[11px] font-mono"><div>${order.updatedAt || order.orderDate}</div>${isOrderStale(order) ? '<span class="text-red-600">超過 48h 未更新</span>' : ''}</td><td class="py-3.5 px-4 text-right"><div class="flex items-center justify-end gap-1.5"><button onclick="window.open('index.html?order=' + '${order.id}', '_blank')" class="p-2 rounded-lg hover:bg-brand-surface text-brand-textMuted hover:text-brand-textMain transition cursor-pointer" title="前台預覽"><i class="fa-solid fa-arrow-up-right-from-square"></i></button><button onclick="openOrderDrawer('${order.id}')" class="p-2 rounded-lg hover:bg-brand-surface text-brand-textMuted hover:text-brand-textMain transition cursor-pointer" title="詳情"><i class="fa-solid fa-eye"></i></button><button onclick="openEditOrderModal('${order.id}')" class="p-2 rounded-lg hover:bg-brand-surface text-brand-textMuted hover:text-brand-textMain transition cursor-pointer" title="編輯"><i class="fa-solid fa-pen-to-square"></i></button><button onclick="duplicateOrder('${order.id}')" class="p-2 rounded-lg hover:bg-brand-surface text-brand-textMuted hover:text-blue-600 transition cursor-pointer" title="複製此訂單"><i class="fa-regular fa-copy"></i></button><button onclick="deleteSingleOrder('${order.id}')" class="p-2 rounded-lg hover:bg-red-50 text-brand-textMuted hover:text-red-600 transition cursor-pointer" title="刪除"><i class="fa-solid fa-trash-can"></i></button></div></td></tr>`;
             }).join('');
             updateBatchToolbarUI();
         }
@@ -638,6 +654,48 @@
         function applyBatchDelete() { if (!confirm(`確定刪除 ${selectedOrderIds.size} 筆訂單？`)) return; globalOrders = globalOrders.filter(o => !selectedOrderIds.has(o.id)); selectedOrderIds.clear(); saveToStorage(); updateMetrics(); renderAdminTable(); renderTodayWorkspace(); showToast('刪除完成'); }
         function deleteSingleOrder(id) { if (!confirm(`確定刪除 ${id}？`)) return; globalOrders = globalOrders.filter(o => o.id !== id); saveToStorage(); updateMetrics(); renderAdminTable(); renderTodayWorkspace(); showToast('刪除成功'); }
         
+        // 🌟 新增功能：複製訂單
+        function duplicateOrder(id) {
+            const order = globalOrders.find(o => o.id === id);
+            if (!order) return;
+            
+            document.getElementById('modal-order-title').innerText = '複製並新增訂單'; 
+            document.getElementById('edit-order-is-new').value = 'true';
+            
+            // 產生新單號，但其他資料自動帶入
+            document.getElementById('edit-order-id').value = `#BEC-2026-${Math.floor(1000 + Math.random() * 9000)}`;
+            
+            document.getElementById('edit-customer-name').value = order.customerName || '';
+            document.getElementById('edit-customer-email').value = order.email || '';
+            document.getElementById('edit-customer-phone').value = order.phone || '';
+            
+            const carrierSelect = document.getElementById('edit-carrier');
+            carrierSelect.value = order.carrier || '';
+            if(!Array.from(carrierSelect.options).some(opt => opt.value === order.carrier) && order.carrier) {
+                carrierSelect.value = '其他';
+            }
+            toggleCustomTrackingUrl();
+            if (carrierSelect.value === '其他') {
+                document.getElementById('edit-custom-tracking-url').value = order.customTrackingUrl || '';
+            }
+
+            document.getElementById('edit-tracking-no').value = order.trackingNo || '';
+            document.getElementById('edit-eta').value = order.eta || '';
+            document.getElementById('edit-attention-status').value = order.attentionStatus || 'normal';
+            document.getElementById('edit-order-notes').value = order.notes || '';
+            document.getElementById('edit-shipping').value = order.shipping || 0;
+            
+            renderEditItems(order.items && order.items.length > 0 ? JSON.parse(JSON.stringify(order.items)) : [{ name: '精選預購商品', qty: 1, price: 0 }]);
+            
+            document.getElementById('edit-current-stage').dataset.originalStage = order.currentStageId || 'created';
+            const activeStages = order.workflowStages && order.workflowStages.length > 0 ? order.workflowStages : globalStages.map(s => s.id);
+            renderWorkflowCheckboxes(activeStages); 
+            syncCurrentStageDropdown(order.currentStageId || 'created'); 
+            
+            openModal('modal-edit-order');
+            showToast('已複製訂單內容');
+        }
+
         function exportToCSV() {
             let csv = '\uFEFF訂單編號,顧客姓名,Email,電話,當前階段,管理狀態,ETA,最後更新,總金額,下單時間,備註\n';
             globalOrders.forEach(o => { const stageObj = globalStages.find(s => s.id === o.currentStageId); csv += `"${o.id}","${o.customerName}","${o.email}","${o.phone}","${stageObj ? stageObj.label : o.currentStageId}","${getAttentionMeta(o.attentionStatus).label}","${o.eta || ''}","${o.updatedAt || ''}","${o.total}","${o.orderDate}","${o.notes || ''}"\n`; });
@@ -691,6 +749,18 @@
             saveToStorage(); renderStageManagerList(); renderAdminTable(); document.getElementById('new-stage-id').value = ''; document.getElementById('new-stage-label').value = ''; document.getElementById('new-stage-desc').value = '';
         }
 
+        // 🌟 新增：控制自訂物流網址輸入框的顯示與隱藏
+        function toggleCustomTrackingUrl() {
+            const carrierSelect = document.getElementById('edit-carrier');
+            const customContainer = document.getElementById('custom-tracking-url-container');
+            if (carrierSelect.value === '其他') {
+                customContainer.classList.remove('hidden');
+            } else {
+                customContainer.classList.add('hidden');
+                document.getElementById('edit-custom-tracking-url').value = '';
+            }
+        }
+
         function renderEditItems(items = []) {
             const container = document.getElementById('edit-items-container');
             container.innerHTML = items.map((item, idx) => `
@@ -733,9 +803,10 @@
         function openNewOrderModal() {
             document.getElementById('modal-order-title').innerText = '新增訂單'; document.getElementById('edit-order-is-new').value = 'true';
             document.getElementById('edit-order-id').value = `#BEC-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-            ['edit-customer-name', 'edit-customer-email', 'edit-customer-phone', 'edit-carrier', 'edit-tracking-no', 'edit-order-notes'].forEach(id => document.getElementById(id).value = '');
+            ['edit-customer-name', 'edit-customer-email', 'edit-customer-phone', 'edit-carrier', 'edit-tracking-no', 'edit-order-notes', 'edit-custom-tracking-url'].forEach(id => document.getElementById(id).value = '');
             document.getElementById('edit-eta').value = '依目前物流進度估算'; document.getElementById('edit-attention-status').value='normal';
             document.getElementById('edit-shipping').value = 0;
+            toggleCustomTrackingUrl();
             renderEditItems([{ name: '精選預購商品', qty: 1, price: 0 }]);
             document.getElementById('edit-current-stage').dataset.originalStage = 'created';
             renderWorkflowCheckboxes(globalStages.map(s => s.id)); syncCurrentStageDropdown('created'); openModal('modal-edit-order');
@@ -745,7 +816,18 @@
             const order = globalOrders.find(o => o.id === orderId); if (!order) return;
             document.getElementById('modal-order-title').innerText = `編輯訂單 ${order.id}`; document.getElementById('edit-order-is-new').value = 'false';
             document.getElementById('edit-order-id').value = order.id; document.getElementById('edit-customer-name').value = order.customerName; document.getElementById('edit-customer-email').value = order.email; document.getElementById('edit-customer-phone').value = order.phone;
-            document.getElementById('edit-carrier').value = order.carrier || ''; document.getElementById('edit-tracking-no').value = order.trackingNo || '';
+            
+            const carrierSelect = document.getElementById('edit-carrier');
+            carrierSelect.value = order.carrier || '';
+            if(!Array.from(carrierSelect.options).some(opt => opt.value === order.carrier) && order.carrier) {
+                carrierSelect.value = '其他';
+            }
+            toggleCustomTrackingUrl();
+            if (carrierSelect.value === '其他') {
+                document.getElementById('edit-custom-tracking-url').value = order.customTrackingUrl || '';
+            }
+
+            document.getElementById('edit-tracking-no').value = order.trackingNo || '';
             document.getElementById('edit-eta').value = order.eta || ''; document.getElementById('edit-attention-status').value=order.attentionStatus || 'normal'; document.getElementById('edit-order-notes').value = order.notes || '';
             document.getElementById('edit-shipping').value = order.shipping || 0;
             renderEditItems(order.items || []);
@@ -778,7 +860,9 @@
         function handleSaveOrderSubmit(e) {
             e.preventDefault();
             const orderId = document.getElementById('edit-order-id').value.trim();
-            const carrier = document.getElementById('edit-carrier').value.trim();
+            const carrierSelect = document.getElementById('edit-carrier').value;
+            const carrier = carrierSelect === '其他' ? '其他' : carrierSelect;
+            const customTrackingUrl = carrier === '其他' ? document.getElementById('edit-custom-tracking-url').value.trim() : '';
             const trackingNo = document.getElementById('edit-tracking-no').value.trim();
             const workflowStages = Array.from(document.querySelectorAll('.wf-checkbox:checked')).map(cb => cb.value);
             if (workflowStages.length === 0) { alert('至少需勾選一項歷程階段！'); return; }
@@ -801,7 +885,7 @@
             if (document.getElementById('edit-order-is-new').value === 'true') {
                 globalOrders.unshift({
                     id: orderId, customerName: document.getElementById('edit-customer-name').value.trim(), email: document.getElementById('edit-customer-email').value.trim(), phone: document.getElementById('edit-customer-phone').value.trim(),
-                    carrier, trackingNo, eta: document.getElementById('edit-eta').value.trim() || '依目前物流進度估算', attentionStatus: document.getElementById('edit-attention-status').value, updatedAt:now, orderDate: now,
+                    carrier, trackingNo, customTrackingUrl, eta: document.getElementById('edit-eta').value.trim() || '依目前物流進度估算', attentionStatus: document.getElementById('edit-attention-status').value, updatedAt:now, orderDate: now,
                     currentStageId: document.getElementById('edit-current-stage').value, notes: document.getElementById('edit-order-notes').value.trim(), workflowStages, items, subtotal, shipping, total, timeline: [{ time: now, title: '訂單成立', desc: '系統建檔' }], auditLog: []
                 });
             } else {
@@ -812,6 +896,7 @@
                     order.phone = document.getElementById('edit-customer-phone').value.trim();
                     order.carrier = carrier; 
                     order.trackingNo = trackingNo; 
+                    order.customTrackingUrl = customTrackingUrl;
                     order.eta = document.getElementById('edit-eta').value.trim(); 
                     order.attentionStatus = document.getElementById('edit-attention-status').value;
                     
